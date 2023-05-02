@@ -1,5 +1,8 @@
 # Search Engine Python, PHP, AJAX
 
+# Author: Austen Green of AustenJGreen.com
+
+
 This script is a simple web crawler that starts from a given URL and crawls the website to collect data on each page, skipping any PDF files. The collected data is saved to a JSON file, and the URLs of skipped PDFs are logged in a separate file.
 
 ## Prerequisites
