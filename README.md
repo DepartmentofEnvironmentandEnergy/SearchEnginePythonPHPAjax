@@ -29,7 +29,7 @@ pip install requests beautifulsoup4 html5lib
 4. Run the script with the following command:
 
    ```
-   python web_crawler.py
+   python spider.py
    ```
 
 5. The script will crawl the specified website and collect data on each page. The collected data will be saved in a file named `website_data.json`, and the URLs of any skipped PDF files will be logged in a file named `skipped.log`.
