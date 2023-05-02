@@ -1,8 +1,4 @@
-# Thread Locking / Enabling more threads to make it process faster
-#   This implementation uses a thread pool with a default of 10 worker threads to crawl websites concurrently. 
-#   You can adjust the max_workers parameter to change the number of threads used. 
-#   Keep in mind that increasing the number of threads will also increase the load on your system and the target website.
-
+# import necessary modules
 import json
 import requests
 from bs4 import BeautifulSoup
@@ -11,76 +7,87 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
+# create a lock object to synchronize access to shared resources in a multi-threaded environment
 lock = threading.Lock()
 
+# define a function that takes a URL as input, fetches the HTML content using requests, parses it using BeautifulSoup, 
+# extracts all links from the page and returns a dictionary object with the URL, title and content of the page, 
+# and a list of links on the page
 def crawl_url(url):
-    session = requests.Session()
+    with requests.Session() as session:
+        try:
+            response = session.get(url)
+        except requests.exceptions.RequestException as e:
+            print(f"Error while fetching {url}: {e}")
+            return None
 
-    try:
-        response = session.get(url)
-    except requests.exceptions.RequestException as e:
-        print(f"Error while fetching {url}: {e}")
-        return None
+        soup = BeautifulSoup(response.content, 'html5lib')
 
-    soup = BeautifulSoup(response.content, 'html5lib')
-    
-    # Check if the file extension is .pdf
-    is_pdf = urlparse(url).path.lower().endswith('.pdf')
+        # check if the URL points to a PDF file
+        is_pdf = urlparse(url).path.lower().endswith('.pdf')
+        data = {
+            'url': url,
+            'title': soup.title.string.strip() if soup.title else '',
+            'content': '' if is_pdf else ' '.join(soup.stripped_strings)
+        }
 
-    # This block creates the data object for the current URL
-    data = {
-        'url': url,
-        'title': soup.title.string.strip() if soup.title else '',
-        'content': '' if is_pdf else ' '.join(soup.stripped_strings)
-    }
-
-    if is_pdf:
-        with lock:
-            with open('skipped.log', 'a') as f:
+        # if the URL points to a PDF file, log it in a file called skipped.log
+        if is_pdf:
+            with lock, open('skipped.log', 'a') as f:
                 f.write(f"Skipped: {url}\n")
 
-    links = []
-    for link in soup.find_all('a', href=True):
-        href = link['href']
-        if not (href.startswith('#') or href.startswith('javascript:') or href.startswith('tel:') or href.startswith('mailto:') or href.startswith('Mailto:')):
-            full_url = urljoin(url, href)
-            links.append(full_url)
+        # extract all links from the page and convert them to absolute URLs using the urljoin function
+        # filter out some types of URLs (such as those that start with #, javascript:, tel:, mailto:, and Mailto:)
+        links = [urljoin(url, link['href']) for link in soup.find_all('a', href=True) if not (link['href'].startswith(('#', 'javascript:', 'tel:', 'mailto:', 'Mailto:')))]
 
-    return (data, links)
+    return data, links
 
+# define a function that takes a start URL and a max_workers parameter, 
+# initializes a set to track visited links and a deque to store URLs to crawl,
+# creates a thread pool using ThreadPoolExecutor with a maximum number of workers,
+# fetches the data for each URL and its associated links, and writes the data to a JSON file called website_data.json
 def crawl_website(start_url, max_workers=10):
     visited_links = set()
     url_queue = deque([start_url])
 
-    # This function writes the data to the JSON file
     def write_data(data):
-        with lock:
-            with open('website_data.json', 'a') as f:
-                json.dump(data, f)
-                f.write('\n')  # Add a newline after each JSON object
+        with lock, open('website_data.json', 'a') as f:
+            json.dump(data, f)
+            f.write('\n')
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         while url_queue:
+            # submit each URL in the URL queue to the thread pool and store the future object and the corresponding URL in a dictionary
             future_to_url = {executor.submit(crawl_url, url): url for url in url_queue}
             url_queue.clear()
 
             for future in as_completed(future_to_url):
+                # extract the URL from the dictionary using the future object
                 url = future_to_url[future]
+                # add the URL to the set of visited links
                 visited_links.add(url)
 
                 try:
+                    # get the result of the future object
                     result = future.result()
                 except Exception as exc:
                     print(f"{url} generated an exception: {exc}")
                 else:
                     if result is not None:
+                        # extract the data and links from the result
                         data, links = result
+                        # write the data to the JSON file
                         write_data(data)
 
+                        # add any new links to the URL queue
                         for link in links:
                             if link not in visited_links:
                                 url_queue.append(link)
 
+# The code block is an entry point to the script that checks if the script is being run as the main program. 
+# If the script is being run as the main program, it sets a variable `start_url` to 'http://example.com'.
+# Finally, the `crawl_website` function is called with the `start_url` as its parameter to initiate the crawling process.
+
 if __name__ == '__main__':
-    start_url = 'http://example.com'  # Replace with the URL you want to crawl
+    start_url = 'http://example.com'
     crawl_website(start_url)
