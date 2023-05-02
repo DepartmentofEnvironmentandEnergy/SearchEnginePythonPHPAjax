@@ -33,7 +33,7 @@
 #         json.dump(data, f)
 
 # if __name__ == '__main__':
-#     start_url = 'http://dee.ne.gov'  # Replace with the URL you want to crawl
+#     start_url = 'http://example.com'  # Replace with the URL you want to crawl
 #     crawl_website(start_url)
 
 
